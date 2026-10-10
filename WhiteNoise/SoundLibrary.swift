@@ -19,11 +19,11 @@ struct Sound: Identifiable, Hashable {
 
     /// Icons for sounds whose names don't describe them (place names, etc.).
     private static let customSymbols: [String: String] = [
-        "Daintree": "cloud.bolt.rain.fill",
         "Inari": "leaf.fill",
         "Kerala": "cloud.rain.fill",
-        "Serengeti": "moon.stars.fill",
         "Sentosa": "beach.umbrella.fill",
+        "Serengeti": "moon.stars.fill",
+        "Tasmania": "cloud.bolt.rain.fill",
         "Yellowstone": "wind",
     ]
 

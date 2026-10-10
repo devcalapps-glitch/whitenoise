@@ -4,7 +4,7 @@
 //   Niagara        - brown noise: deeper 1/f² noise (integrated white noise), subsonic drift filtered out
 //   Inari          - Nordic forest: gusty leaf rustle, low wind, sparse songbirds, a distant cuckoo
 //   Serengeti      - savanna night: warm grass wind, a cricket chorus that comes and goes, distant frogs
-//   Daintree       - rainforest rain: pink-noise rain hiss with slow intensity drift, droplets, valley rumble, distant thunder
+//   Tasmania       - island rain: pink-noise rain hiss with slow intensity drift, droplets, valley rumble, distant thunder
 // Each track is `trackMinutes` long, levelled to `targetLoudnessDB`, and its end is crossfaded into its start.
 // Output is deterministic (fixed seeds), so rebuilding gives the same audio.
 // Usage (from the repo root): swift -O scripts/generate_sounds.swift [--force]
@@ -495,7 +495,7 @@ let totalSeconds = trackMinutes * 60 + crossfadeSeconds
 let sounds: [(String, (URL) throws -> Void)] = [
     ("Big Sur", { try render({ PinkNoise() }, to: $0) }),
     ("Niagara", { try render({ BrownNoise() }, to: $0) }),
-    ("Daintree", { try render({ MountainRain(totalSeconds: totalSeconds) }, to: $0) }),
+    ("Tasmania", { try render({ MountainRain(totalSeconds: totalSeconds) }, to: $0) }),
     ("Inari", { try render({ Forest(totalSeconds: totalSeconds) }, to: $0) }),
     ("Serengeti", { try render({ SavannaNight(totalSeconds: totalSeconds) }, to: $0) }),
 ]
