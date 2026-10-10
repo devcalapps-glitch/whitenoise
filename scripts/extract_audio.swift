@@ -1,7 +1,9 @@
 #!/usr/bin/env swift
-// Turns every video in SourceVideos/ into a long, seamlessly looping .m4a in WhiteNoise/Sounds/.
-// The clip's end is crossfaded into its start, its loudness is levelled to `targetLoudnessDB`,
-// and that loop is repeated to fill `trackMinutes`.
+// Turns every recording into a long, seamlessly looping .m4a in WhiteNoise/Sounds/.
+// 1. Each video in SourceVideos/ (git-ignored) has its audio track copied, untouched, to SourceAudio/<name>.m4a.
+// 2. Each file in SourceAudio/ (committed) is trimmed, its end crossfaded into its start, its loudness
+//    levelled to `targetLoudnessDB`, and that loop repeated to fill `trackMinutes`.
+// Audio-only recordings (.m4a/.mp3/.wav/...) can be dropped straight into SourceAudio/.
 // scripts/trims.json can keep only part of a clip, e.g. { "Annapurna": { "start": 1.3, "end": 4.0 } } (seconds).
 // Usage (from the repo root): swift scripts/extract_audio.swift [--force]
 //   --force  rebuild sounds that already exist
@@ -17,9 +19,11 @@ let peakCeiling: Float = 0.89  // about -1 dBFS, leaves headroom for AAC encodin
 
 let fileManager = FileManager.default
 let root = URL(fileURLWithPath: fileManager.currentDirectoryPath)
-let inputDir = root.appendingPathComponent("SourceVideos")
+let videoDir = root.appendingPathComponent("SourceVideos")
+let sourceDir = root.appendingPathComponent("SourceAudio")
 let outputDir = root.appendingPathComponent("WhiteNoise/Sounds")
 let videoExtensions: Set<String> = ["mp4", "mov", "m4v"]
+let audioExtensions: Set<String> = ["m4a", "mp3", "wav", "aif", "aiff", "caf", "aac"]
 let force = CommandLine.arguments.contains("--force")
 
 struct Trim: Decodable {
@@ -32,35 +36,33 @@ let trims: [String: Trim] = try fileManager.fileExists(atPath: trimsFile.path)
     ? JSONDecoder().decode([String: Trim].self, from: Data(contentsOf: trimsFile))
     : [:]
 
-guard fileManager.fileExists(atPath: inputDir.path) else {
-    print("No SourceVideos/ folder found. Create it and add your videos, then run this from the repo root.")
-    exit(1)
-}
-
-try fileManager.createDirectory(at: outputDir, withIntermediateDirectories: true)
-
-let videos = try fileManager.contentsOfDirectory(at: inputDir, includingPropertiesForKeys: nil)
-    .filter { videoExtensions.contains($0.pathExtension.lowercased()) }
-    .sorted { $0.lastPathComponent < $1.lastPathComponent }
-
-if videos.isEmpty {
-    print("No .mp4/.mov/.m4v files in SourceVideos/.")
-    exit(0)
+func files(in dir: URL, withExtensions extensions: Set<String>) throws -> [URL] {
+    guard fileManager.fileExists(atPath: dir.path) else { return [] }
+    return try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+        .filter { extensions.contains($0.pathExtension.lowercased()) }
+        .sorted { $0.lastPathComponent < $1.lastPathComponent }
 }
 
 func failure(_ message: String) -> NSError {
     NSError(domain: "extract", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
 }
 
+/// Copies the video's audio track into an .m4a without re-encoding when possible.
 func extractAudio(from video: URL, to output: URL) async throws {
     let asset = AVURLAsset(url: video)
     guard try await !asset.loadTracks(withMediaType: .audio).isEmpty else {
         throw failure("no audio track")
     }
-    guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetAppleM4A) else {
-        throw failure("cannot create export session")
+    for preset in [AVAssetExportPresetPassthrough, AVAssetExportPresetAppleM4A] {
+        guard let session = AVAssetExportSession(asset: asset, presetName: preset) else { continue }
+        do {
+            try await session.export(to: output, as: .m4a)
+            return
+        } catch {
+            try? fileManager.removeItem(at: output)
+        }
     }
-    try await session.export(to: output, as: .m4a)
+    throw failure("cannot export audio")
 }
 
 /// Returns one loop of the clip whose last `fade` frames blend into its first `fade` frames,
@@ -144,13 +146,35 @@ func buildTrack(from audio: URL, to output: URL, trim: Trim?) throws {
     }
 }
 
-let tempDir = fileManager.temporaryDirectory.appendingPathComponent("whitenoise-extract-\(UUID().uuidString)")
-try fileManager.createDirectory(at: tempDir, withIntermediateDirectories: true)
-defer { try? fileManager.removeItem(at: tempDir) }
+try fileManager.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+try fileManager.createDirectory(at: outputDir, withIntermediateDirectories: true)
 
 var failures = 0
-for video in videos {
+
+let existingSources = Set(try files(in: sourceDir, withExtensions: audioExtensions).map {
+    $0.deletingPathExtension().lastPathComponent
+})
+for video in try files(in: videoDir, withExtensions: videoExtensions) {
     let name = video.deletingPathExtension().lastPathComponent
+    guard !existingSources.contains(name) else { continue }
+    let audio = sourceDir.appendingPathComponent(name).appendingPathExtension("m4a")
+    do {
+        try await extractAudio(from: video, to: audio)
+        print("audio    SourceAudio/\(name).m4a")
+    } catch {
+        failures += 1
+        print("FAILED   \(name): \(error.localizedDescription)")
+    }
+}
+
+let sources = try files(in: sourceDir, withExtensions: audioExtensions)
+if sources.isEmpty {
+    print("No recordings found. Add videos to SourceVideos/ or audio files to SourceAudio/, then run this from the repo root.")
+    exit(failures == 0 ? 0 : 1)
+}
+
+for source in sources {
+    let name = source.deletingPathExtension().lastPathComponent
     let output = outputDir.appendingPathComponent(name).appendingPathExtension("m4a")
     if fileManager.fileExists(atPath: output.path) {
         guard force else {
@@ -159,10 +183,8 @@ for video in videos {
         }
         try fileManager.removeItem(at: output)
     }
-    let raw = tempDir.appendingPathComponent(name).appendingPathExtension("m4a")
     do {
-        try await extractAudio(from: video, to: raw)
-        try buildTrack(from: raw, to: output, trim: trims[name])
+        try buildTrack(from: source, to: output, trim: trims[name])
         print("done     \(name).m4a")
     } catch {
         failures += 1
@@ -171,5 +193,4 @@ for video in videos {
     }
 }
 
-try? fileManager.removeItem(at: tempDir)
 exit(failures == 0 ? 0 : 1)
