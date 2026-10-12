@@ -21,6 +21,7 @@ struct Sound: Identifiable, Hashable {
     private static let customSymbols: [String: String] = [
         "Inari": "leaf.fill",
         "Kerala": "cloud.rain.fill",
+        "Rainier": "waveform",
         "Sentosa": "beach.umbrella.fill",
         "Serengeti": "moon.stars.fill",
         "Tasmania": "cloud.bolt.rain.fill",
