@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     let sounds: [Sound]
     @Environment(AudioPlayer.self) private var player
+    @State private var showingAbout = false
 
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 14)]
 
@@ -36,6 +37,20 @@ struct ContentView: View {
             }
             .background(Theme.background.ignoresSafeArea())
             .navigationTitle("Sleep Sounds")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingAbout = true
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .foregroundStyle(Theme.dimText.opacity(0.7))
+                    }
+                    .accessibilityLabel("About Sleep Sounds")
+                }
+            }
+            .sheet(isPresented: $showingAbout) {
+                AboutView()
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 NowPlayingBar()
                     .padding(.top, 8)
@@ -188,7 +203,7 @@ private struct NowPlayingBar: View {
     }
 }
 
-private enum Theme {
+enum Theme {
     static let background = Color(red: 0.04, green: 0.05, blue: 0.09)
     static let tile = Color.white.opacity(0.05)
     static let tileActive = Color.white.opacity(0.10)

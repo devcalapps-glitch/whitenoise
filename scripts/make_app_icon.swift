@@ -1,5 +1,6 @@
 #!/usr/bin/env swift
-// Draws the 1024x1024 app icon (night sky, crescent moon, sound-wave bars) into the AppIcon asset.
+// Draws the 1024x1024 app icon (night sky, crescent moon, sound-wave bars) into the AppIcon asset,
+// plus a small copy for the About screen.
 // Usage (from the repo root): swift scripts/make_app_icon.swift
 
 import CoreGraphics
@@ -79,10 +80,24 @@ for (i, h) in heights.enumerated() {
 }
 ctx.fillPath()
 
-let destination = CGImageDestinationCreateWithURL(output as CFURL, UTType.png.identifier as CFString, 1, nil)!
-CGImageDestinationAddImage(destination, ctx.makeImage()!, nil)
-guard CGImageDestinationFinalize(destination) else {
-    print("Could not write \(output.path)")
-    exit(1)
+func writePNG(_ image: CGImage, to url: URL) {
+    let destination = CGImageDestinationCreateWithURL(url as CFURL, UTType.png.identifier as CFString, 1, nil)!
+    CGImageDestinationAddImage(destination, image, nil)
+    guard CGImageDestinationFinalize(destination) else {
+        print("Could not write \(url.path)")
+        exit(1)
+    }
+    print("wrote \(url.path)")
 }
-print("wrote \(output.path)")
+
+let icon = ctx.makeImage()!
+writePNG(icon, to: output)
+
+// A small copy for the About screen (80 pt at @3x).
+let aboutSize = 240
+let aboutContext = CGContext(data: nil, width: aboutSize, height: aboutSize, bitsPerComponent: 8, bytesPerRow: 0,
+                             space: space, bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+aboutContext.interpolationQuality = .high
+aboutContext.draw(icon, in: CGRect(x: 0, y: 0, width: aboutSize, height: aboutSize))
+writePNG(aboutContext.makeImage()!, to: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    .appendingPathComponent("WhiteNoise/Assets.xcassets/AboutIcon.imageset/AboutIcon.png"))
