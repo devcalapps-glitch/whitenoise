@@ -1,5 +1,7 @@
 import AVFoundation
+import MediaPlayer
 import Observation
+import UIKit
 
 @MainActor
 @Observable
@@ -37,6 +39,7 @@ final class AudioPlayer {
         player.volume = volume
         player.automaticallyWaitsToMinimizeStalling = false
         observeSession()
+        setUpRemoteCommands()
     }
 
     static func configureSession() {
@@ -80,6 +83,7 @@ final class AudioPlayer {
         isPlaying = true
         if playingSince == nil { playingSince = Date() }
         if timerTask == nil { startTimer() }
+        updateNowPlaying()
     }
 
     func pause() {
@@ -87,6 +91,7 @@ final class AudioPlayer {
         isPlaying = false
         stopClock()
         cancelTimer()
+        updateNowPlaying()
     }
 
     private func stopClock() {
@@ -170,6 +175,7 @@ final class AudioPlayer {
             wasPlayingBeforeInterruption = isPlaying
             isPlaying = false
             stopClock()
+            updateNowPlaying()
         case .ended:
             if wasPlayingBeforeInterruption, options?.contains(.shouldResume) == true {
                 resume()
@@ -178,5 +184,57 @@ final class AudioPlayer {
         default:
             break
         }
+    }
+
+    // MARK: Lock Screen and Control Center
+
+    @ObservationIgnored private let artwork = AudioPlayer.makeArtwork()
+
+    /// Nonisolated because the system asks for the artwork image off the main thread.
+    private nonisolated static func makeArtwork() -> MPMediaItemArtwork? {
+        guard let image = UIImage(named: "AboutIcon") else { return nil }
+        return MPMediaItemArtwork(boundsSize: image.size) { @Sendable _ in image }
+    }
+
+    private func setUpRemoteCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+        commands.playCommand.addTarget { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.currentSound != nil else { return .noActionableNowPlayingItem }
+                self.resume()
+                return .success
+            }
+        }
+        commands.pauseCommand.addTarget { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.pause()
+                return .success
+            }
+        }
+        commands.togglePlayPauseCommand.addTarget { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.currentSound != nil else { return .noActionableNowPlayingItem }
+                self.togglePlayback()
+                return .success
+            }
+        }
+    }
+
+    private func updateNowPlaying() {
+        let center = MPNowPlayingInfoCenter.default()
+        guard let sound = currentSound else {
+            center.nowPlayingInfo = nil
+            return
+        }
+        var info: [String: Any] = [
+            MPMediaItemPropertyTitle: sound.name,
+            MPMediaItemPropertyArtist: "Sleep Sounds",
+            // Tracks loop forever, so present them as a live stream with no scrubber.
+            MPNowPlayingInfoPropertyIsLiveStream: true,
+            MPNowPlayingInfoPropertyPlaybackRate: isPlaying ? 1.0 : 0.0,
+        ]
+        if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
+        center.nowPlayingInfo = info
+        center.playbackState = isPlaying ? .playing : .paused
     }
 }

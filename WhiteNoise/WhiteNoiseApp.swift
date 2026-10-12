@@ -13,6 +13,7 @@ struct WhiteNoiseApp: App {
             ContentView(sounds: SoundLibrary.load())
                 .environment(player)
                 .preferredColorScheme(.dark)
+                .tint(Color("AccentColor"))
         }
     }
 }
