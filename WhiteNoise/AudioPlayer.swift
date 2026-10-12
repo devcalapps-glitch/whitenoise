@@ -66,6 +66,21 @@ final class AudioPlayer {
     }
 
     func play(_ sound: Sound) {
+        load(sound)
+        resume()
+    }
+
+    /// Selects the sound played most recently, ready to play but not started.
+    func restoreLastSound(from sounds: [Sound]) {
+        guard currentSound == nil,
+              let name = UserDefaults.standard.string(forKey: Self.lastSoundKey),
+              let sound = sounds.first(where: { $0.name == name }) else { return }
+        load(sound)
+    }
+
+    private static let lastSoundKey = "lastSound"
+
+    private func load(_ sound: Sound) {
         looper?.disableLooping()
         player.removeAllItems()
         let item = AVPlayerItem(url: sound.url)
@@ -73,7 +88,7 @@ final class AudioPlayer {
         currentSound = sound
         playedBefore = 0
         playingSince = nil
-        resume()
+        UserDefaults.standard.set(sound.name, forKey: Self.lastSoundKey)
     }
 
     func resume() {

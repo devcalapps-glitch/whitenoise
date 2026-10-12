@@ -51,6 +51,9 @@ struct ContentView: View {
             .sheet(isPresented: $showingAbout) {
                 AboutView()
             }
+            .task {
+                player.restoreLastSound(from: sounds)
+            }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 NowPlayingBar()
                     .padding(.top, 8)
@@ -147,12 +150,12 @@ private struct NowPlayingBar: View {
         @Bindable var player = player
         VStack(spacing: 14) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(player.currentSound?.name ?? "Choose a sound")
-                        .font(.headline)
-                        .foregroundStyle(Theme.dimText)
-                        .lineLimit(1)
-                    if player.currentSound != nil {
+                if let sound = player.currentSound {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(sound.name)
+                            .font(.headline)
+                            .foregroundStyle(Theme.dimText)
+                            .lineLimit(1)
                         TimelineView(.periodic(from: .now, by: 1)) { context in
                             Text(Self.status(for: player, at: context.date))
                                 .monospacedDigit()
@@ -160,19 +163,28 @@ private struct NowPlayingBar: View {
                         .font(.caption)
                         .foregroundStyle(Theme.dimText.opacity(0.6))
                     }
+                    Spacer()
+                    Button {
+                        player.togglePlayback()
+                    } label: {
+                        Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 44))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Select a sound")
+                            .font(.headline)
+                            .foregroundStyle(Theme.dimText.opacity(0.7))
+                        Text("Tap any sound above to start")
+                            .font(.caption)
+                            .foregroundStyle(Theme.dimText.opacity(0.45))
+                    }
+                    Spacer()
                 }
-                Spacer()
-                Button {
-                    player.togglePlayback()
-                } label: {
-                    Image(systemName: player.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(Color.accentColor)
-                }
-                .disabled(player.currentSound == nil)
-                .opacity(player.currentSound == nil ? 0.4 : 1)
-                .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
             }
+            .frame(minHeight: 52)
             HStack(spacing: 10) {
                 Image(systemName: "speaker.fill")
                 Slider(value: $player.volume, in: 0...1)
@@ -188,7 +200,9 @@ private struct NowPlayingBar: View {
     }
 
     private static func status(for player: AudioPlayer, at date: Date) -> String {
-        let elapsed = Duration.seconds(Int(player.elapsed(at: date)))
+        let seconds = Int(player.elapsed(at: date))
+        if !player.isPlaying, seconds == 0 { return "Ready to play" }
+        let elapsed = Duration.seconds(seconds)
             .formatted(.time(pattern: .hourMinuteSecond))
         var text = player.isPlaying ? "Playing for \(elapsed)" : "Paused at \(elapsed)"
         if let end = player.timerEndDate {
