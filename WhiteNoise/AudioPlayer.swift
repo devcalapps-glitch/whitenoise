@@ -91,7 +91,9 @@ final class AudioPlayer {
     }
 
     func resume() {
-        try? AVAudioSession.sharedInstance().setActive(true)
+        Task.detached(priority: .userInitiated) {
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
         player.volume = volume
         player.play()
         isPlaying = true
