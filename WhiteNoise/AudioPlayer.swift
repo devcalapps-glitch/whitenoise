@@ -46,7 +46,6 @@ final class AudioPlayer {
         let session = AVAudioSession.sharedInstance()
         do {
             try session.setCategory(.playback, mode: .default)
-            try session.setActive(true)
         } catch {
             print("Audio session setup failed: \(error)")
         }
