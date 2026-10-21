@@ -12,9 +12,9 @@ struct ContentView: View {
             ScrollView {
                 if sounds.isEmpty {
                     ContentUnavailableView(
-                        "No sounds yet",
+                        "No Sounds Available",
                         systemImage: "speaker.slash",
-                        description: Text("Add videos to SourceVideos/ and run scripts/extract_audio.swift.")
+                        description: Text("Try closing and reopening the app.")
                     )
                     .padding(.top, 80)
                 } else {
@@ -188,6 +188,7 @@ private struct NowPlayingBar: View {
             HStack(spacing: 10) {
                 Image(systemName: "speaker.fill")
                 Slider(value: $player.volume, in: 0...1)
+                    .accessibilityLabel("Volume")
                 Image(systemName: "speaker.wave.3.fill")
             }
             .font(.footnote)
